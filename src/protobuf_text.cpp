@@ -16,9 +16,6 @@ SQLITE_EXTENSION_INIT3
 
 namespace {
 
-using google::protobuf::Descriptor;
-using google::protobuf::DescriptorPool;
-using google::protobuf::DynamicMessageFactory;
 using google::protobuf::Message;
 using google::protobuf::TextFormat;
 
@@ -34,16 +31,13 @@ protobuf_to_text(sqlite3_context *context, int argc, sqlite3_value **argv)
     const std::string message_data = string_from_sqlite3_value(argv[0]);
     const std::string message_name = string_from_sqlite3_value(argv[1]);
 
-    const Descriptor *descriptor =
-        DescriptorPool::generated_pool()->FindMessageTypeByName(message_name);
-    if (!descriptor) {
+    const Message* prototype = get_prototype(message_name);
+    if (!prototype) {
         sqlite3_result_error(context, "Could not find message descriptor", -1);
         return;
     }
 
-    DynamicMessageFactory factory;
-    std::unique_ptr<Message> message(
-        factory.GetPrototype(descriptor)->New());
+    std::unique_ptr<Message> message(prototype->New());
     if (!message->ParseFromString(message_data)) {
         sqlite3_result_error(context, "Failed to parse message", -1);
         return;
@@ -70,17 +64,13 @@ protobuf_of_text(sqlite3_context *context, int argc, sqlite3_value **argv)
     const std::string text_data = string_from_sqlite3_value(argv[0]);
     const std::string message_name = string_from_sqlite3_value(argv[1]);
 
-    const Descriptor *descriptor =
-        DescriptorPool::generated_pool()->FindMessageTypeByName(message_name);
-    if (!descriptor) {
+    const Message* prototype = get_prototype(message_name);
+    if (!prototype) {
         sqlite3_result_error(context, "Could not find message descriptor", -1);
         return;
     }
 
-    DynamicMessageFactory factory;
-    std::unique_ptr<Message> message(
-        factory.GetPrototype(descriptor)->New());
-
+    std::unique_ptr<Message> message(prototype->New());
     if (!TextFormat::ParseFromString(text_data, message.get())) {
         sqlite3_result_error(context, "Could not parse text proto", -1);
         return;

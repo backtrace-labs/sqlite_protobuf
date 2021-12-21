@@ -16,8 +16,6 @@ SQLITE_EXTENSION_INIT3
 namespace {
 
 using google::protobuf::Descriptor;
-using google::protobuf::DescriptorPool;
-using google::protobuf::DynamicMessageFactory;
 using google::protobuf::EnumDescriptor;
 using google::protobuf::EnumValueDescriptor;
 using google::protobuf::FieldDescriptor;
@@ -94,18 +92,15 @@ static void protobuf_extract(sqlite3_context *context,
         return;
     }
     
-    // Find the message type in the descriptor pool
-    const Descriptor *descriptor =
-        DescriptorPool::generated_pool()->FindMessageTypeByName(message_name);
-    if (!descriptor) {
+    // Find the message prototype and descriptor.
+    const Message *prototype = get_prototype(message_name);
+    if (!prototype) {
         sqlite3_result_error(context, "Could not find message descriptor", -1);
         return;
     }
-    
+
     // Deserialize the message
-    DynamicMessageFactory factory;
-    std::unique_ptr<Message> root_message(
-        factory.GetPrototype(descriptor)->New());
+    std::unique_ptr<Message> root_message(prototype->New());
     if (!root_message->ParseFromString(message_data)) {
         sqlite3_result_error(context, "Failed to parse message", -1);
         return;
@@ -118,6 +113,9 @@ static void protobuf_extract(sqlite3_context *context,
         return;
     }
     
+    // Get the Descrptor interface for the message type
+    const Descriptor* descriptor = prototype->GetDescriptor();
+
     // Get the Reflection interface for the message
     const Reflection *reflection = root_message->GetReflection();
     
