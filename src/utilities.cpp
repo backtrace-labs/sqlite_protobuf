@@ -16,12 +16,23 @@ std::string string_from_sqlite3_value(sqlite3_value *value)
 }
 
 const Message* get_prototype(const std::string &message_name) {
-    const Descriptor *descriptor = DescriptorPool::generated_pool()->FindMessageTypeByName(message_name);
-    if (!descriptor) {
-        return nullptr;
+    static thread_local struct {
+        std::string message_name;
+        const Message* prototype;
+    } cached;
+
+    if (cached.prototype == nullptr || cached.message_name != message_name) {
+        const Descriptor *descriptor = DescriptorPool::generated_pool()->FindMessageTypeByName(message_name);
+        if (!descriptor) {
+            return nullptr;
+        }
+
+        MessageFactory *const factory = MessageFactory::generated_factory();
+
+        cached.message_name = message_name;
+        cached.prototype = factory->GetPrototype(descriptor);
     }
-    MessageFactory *const factory = MessageFactory::generated_factory();
-    return factory->GetPrototype(descriptor);
+    return cached.prototype;
 }
 
 }  // namespace sqlite_protobuf
