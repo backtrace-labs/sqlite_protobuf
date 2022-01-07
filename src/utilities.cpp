@@ -47,4 +47,22 @@ const Message *get_prototype(sqlite3_context *context,
     return cached.prototype;
 }
 
+std::unique_ptr<Message> parse_message(sqlite3_context* context,
+                                       const std::string& message_data,
+                                       const std::string& message_name)
+{
+    // Lookup the prototype if necessary.
+    const Message *prototype = get_prototype(context, message_name);
+    if (!prototype)
+        return nullptr;
+
+    std::unique_ptr<Message> message(prototype->New());
+    if (!message->ParseFromString(message_data)) {
+        sqlite3_result_error(context, "Failed to parse message", -1);
+        message.reset();
+    }
+
+    return message;
+}
+
 }  // namespace sqlite_protobuf

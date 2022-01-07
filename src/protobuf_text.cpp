@@ -31,14 +31,8 @@ protobuf_to_text(sqlite3_context *context, int argc, sqlite3_value **argv)
     const std::string message_data = string_from_sqlite3_value(argv[0]);
     const std::string message_name = string_from_sqlite3_value(argv[1]);
 
-    const Message *prototype = get_prototype(context, message_name);
-    if (!prototype) {
-        return;
-    }
-
-    std::unique_ptr<Message> message(prototype->New());
-    if (!message->ParseFromString(message_data)) {
-        sqlite3_result_error(context, "Failed to parse message", -1);
+    auto message = parse_message(context, message_data, message_name);
+    if (!message) {
         return;
     }
 

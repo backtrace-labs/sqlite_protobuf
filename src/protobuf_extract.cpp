@@ -92,16 +92,9 @@ static void protobuf_extract(sqlite3_context *context,
         return;
     }
 
-    // Find the message prototype.
-    const Message *prototype = get_prototype(context, message_name);
-    if (!prototype) {
-        return;
-    }
-
     // Deserialize the message
-    std::unique_ptr<Message> root_message(prototype->New());
-    if (!root_message->ParseFromString(message_data)) {
-        sqlite3_result_error(context, "Failed to parse message", -1);
+    auto root_message = parse_message(context, message_data, message_name);
+    if (!root_message) {
         return;
     }
 
@@ -113,7 +106,7 @@ static void protobuf_extract(sqlite3_context *context,
     }
     
     // Get the Descrptor interface for the message type
-    const Descriptor* descriptor = prototype->GetDescriptor();
+    const Descriptor* descriptor = root_message->GetDescriptor();
 
     // Get the Reflection interface for the message
     const Reflection *reflection = root_message->GetReflection();

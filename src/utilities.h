@@ -19,4 +19,11 @@ std::string string_from_sqlite3_value(sqlite3_value *value);
 // to the caller.
 const google::protobuf::Message* get_prototype(sqlite3_context *context,
                                                const std::string& message_name);
+// Parse a protobuf encoded message `message_data` of type
+// `message_name`.  Returns a `Message` object on success and
+// `nullptr` on failure.  The `context` is set into an error state on
+// failure using `sqlite3_result_error`.
+std::unique_ptr<google::protobuf::Message> parse_message(sqlite3_context *context,
+                                                         const std::string& message_data,
+                                                         const std::string& message_name);
 }  // namespace sqlite_protobuf
