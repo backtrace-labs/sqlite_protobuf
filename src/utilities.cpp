@@ -30,6 +30,11 @@ struct cache {
     // The cached result of parsing of the `message_data`, if any.
     std::unique_ptr<Message> message;
 
+    // The maximum size of the encoded message we have parsed
+    // using `message`. Used to reset `message` if the size of
+    // the encoded messages drops suddenly.
+    size_t max_message_data_size;
+
     // True iff we have managed to parse `message_data`.
     bool parse_success;
 };
@@ -55,16 +60,21 @@ const Message *get_prototype(sqlite3_context *context,
         if (descriptor) {
             MessageFactory *factory = MessageFactory::generated_factory();
             cached->prototype = factory->GetPrototype(descriptor);
+
+            // Prime the message cache.
+            cached->message.reset(cached->prototype->New());
+            cached->parse_success = true;
         } else {
             sqlite3_result_error(context, "Could not find message descriptor", -1);
 
             // Invalidate the cache.
             cached->message_name.clear();
             cached->prototype = nullptr;
-            cached->message_data.clear();
             cached->message.reset();
             cached->parse_success = false;
         }
+        cached->message_data.clear();
+        cached->max_message_data_size = 0;
     }
 
     return cached->prototype;
@@ -84,7 +94,20 @@ Message *parse_message(sqlite3_context* context,
     // Parse the message if we haven't already.
     if (cached->message_data != message_data) {
         cached->message_data = message_data;
-        cached->message.reset(prototype->New());
+
+        // Make sure we have an empty Message object to parse with.
+        // Reuse an existing Message object if the size of the message
+        // to parse doesn't shrink too much.
+        if (cached->message_data.size() >= cached->max_message_data_size / 2) {
+            cached->message->Clear();
+        } else {
+            cached->message.reset(prototype->New());
+            cached->max_message_data_size = 0;
+        }
+
+        cached->max_message_data_size = std::max(cached->max_message_data_size,
+                                                 cached->message_data.size());
+
         cached->parse_success = cached->message->ParseFromString(cached->message_data);
     }
 
