@@ -34,9 +34,8 @@ protobuf_to_json(sqlite3_context *context, int argc, sqlite3_value **argv)
     const std::string message_data = string_from_sqlite3_value(argv[0]);
     const std::string message_name = string_from_sqlite3_value(argv[1]);
 
-    const Message* prototype = get_prototype(message_name);
+    const Message *prototype = get_prototype(context, message_name);
     if (!prototype) {
-        sqlite3_result_error(context, "Could not find message descriptor", -1);
         return;
     }
 
@@ -76,9 +75,8 @@ protobuf_of_json(sqlite3_context *context, int argc, sqlite3_value **argv)
     const std::string json_data = string_from_sqlite3_value(argv[0]);
     const std::string message_name = string_from_sqlite3_value(argv[1]);
 
-    const Message *prototype = get_prototype(message_name);
+    const Message *prototype = get_prototype(context, message_name);
     if (!prototype) {
-        sqlite3_result_error(context, "Could not find message descriptor", -1);
         return;
     }
 

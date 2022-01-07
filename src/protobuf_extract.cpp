@@ -91,11 +91,10 @@ static void protobuf_extract(sqlite3_context *context,
         sqlite3_result_error(context, "Invalid path", -1);
         return;
     }
-    
-    // Find the message prototype and descriptor.
-    const Message *prototype = get_prototype(message_name);
+
+    // Find the message prototype.
+    const Message *prototype = get_prototype(context, message_name);
     if (!prototype) {
-        sqlite3_result_error(context, "Could not find message descriptor", -1);
         return;
     }
 
@@ -105,7 +104,7 @@ static void protobuf_extract(sqlite3_context *context,
         sqlite3_result_error(context, "Failed to parse message", -1);
         return;
     }
-    
+
     // Special case: just return the root object
     if (path == "$") {
         sqlite3_result_blob(context, message_data.c_str(),
