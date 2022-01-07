@@ -114,7 +114,7 @@ static void protobuf_extract(sqlite3_context *context,
     // As we traverse the tree, this is the "current" message we are looking at.
     // We only want the overall message to be managed by std::unique_ptr,
     // and this variable will always point into the overall structure.
-    const Message *message = root_message.get();
+    const Message *message = root_message;
     
     // Parse the rest
     static const auto& path_element_regex =

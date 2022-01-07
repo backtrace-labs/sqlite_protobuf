@@ -23,6 +23,15 @@ struct cache {
 
     // Cached prototype for the message type or `nullptr`.
     const Message *prototype;
+
+    // Encoded message data of cached message or "".
+    std::string message_data;
+
+    // The cached result of parsing of the `message_data`, if any.
+    std::unique_ptr<Message> message;
+
+    // True iff we have managed to parse `message_data`.
+    bool parse_success;
 };
 
 inline struct cache *get_cache() {
@@ -52,27 +61,39 @@ const Message *get_prototype(sqlite3_context *context,
             // Invalidate the cache.
             cached->message_name.clear();
             cached->prototype = nullptr;
+            cached->message_data.clear();
+            cached->message.reset();
+            cached->parse_success = false;
         }
     }
 
     return cached->prototype;
 }
 
-std::unique_ptr<Message> parse_message(sqlite3_context* context,
-                                       const std::string& message_data,
-                                       const std::string& message_name)
+Message *parse_message(sqlite3_context* context,
+                       const std::string& message_data,
+                       const std::string& message_name)
 {
+    // Lookup the prototype.
     const Message *prototype = get_prototype(context, message_name);
     if (!prototype)
         return nullptr;
 
-    std::unique_ptr<Message> message(prototype->New());
-    if (!message->ParseFromString(message_data)) {
-        sqlite3_result_error(context, "Failed to parse message", -1);
-        message.reset();
+    struct cache *cached = get_cache();
+
+    // Parse the message if we haven't already.
+    if (cached->message_data != message_data) {
+        cached->message_data = message_data;
+        cached->message.reset(prototype->New());
+        cached->parse_success = cached->message->ParseFromString(cached->message_data);
     }
 
-    return message;
+    if (!cached->parse_success) {
+        sqlite3_result_error(context, "Failed to parse message", -1);
+        return nullptr;
+    }
+
+    return cached->message.get();
 }
 
 }  // namespace sqlite_protobuf
