@@ -17,6 +17,21 @@ std::string string_from_sqlite3_value(sqlite3_value *value)
 
 namespace {
 
+bool string_equal_to_sqlite3_value(const std::string& str, sqlite3_value *val)
+{
+    // Allow any conversion to take place first.
+    const char *text = static_cast<const char *>(sqlite3_value_blob(val));
+
+    size_t text_size = static_cast<size_t>(sqlite3_value_bytes(val));
+    if (text_size != str.size())
+        return false;
+
+    if (!text)
+        return false;
+
+    return memcmp(text, str.data(), text_size) == 0;
+}
+
 struct cache {
     // Message type name or "".
     std::string message_name;
@@ -47,13 +62,15 @@ inline struct cache *get_cache() {
 } // namespace
 
 const Message *get_prototype(sqlite3_context *context,
-                             const std::string& message_name)
+                             sqlite3_value *message_name)
 {
     struct cache *cached = get_cache();
 
     // Look up the descriptor and prototype for the message type if necessary.
-    if (cached->prototype == nullptr || cached->message_name != message_name) {
-        cached->message_name = message_name;
+    if (cached->prototype == nullptr ||
+        !string_equal_to_sqlite3_value(cached->message_name, message_name)) {
+
+        cached->message_name = string_from_sqlite3_value(message_name);
 
         const DescriptorPool *pool = DescriptorPool::generated_pool();
         const Descriptor *descriptor = pool->FindMessageTypeByName(cached->message_name);
@@ -81,8 +98,8 @@ const Message *get_prototype(sqlite3_context *context,
 }
 
 Message *parse_message(sqlite3_context* context,
-                       const std::string& message_data,
-                       const std::string& message_name)
+                       sqlite3_value *message_data,
+                       sqlite3_value *message_name)
 {
     // Lookup the prototype.
     const Message *prototype = get_prototype(context, message_name);
@@ -92,8 +109,8 @@ Message *parse_message(sqlite3_context* context,
     struct cache *cached = get_cache();
 
     // Parse the message if we haven't already.
-    if (cached->message_data != message_data) {
-        cached->message_data = message_data;
+    if (!string_equal_to_sqlite3_value(cached->message_data,message_data)) {
+        cached->message_data = string_from_sqlite3_value(message_data);
 
         // Make sure we have an empty Message object to parse with.
         // Reuse an existing Message object if the size of the message

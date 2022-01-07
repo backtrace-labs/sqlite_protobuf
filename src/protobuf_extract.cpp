@@ -81,8 +81,8 @@ static void protobuf_extract(sqlite3_context *context,
         return;
     }
 
-    const std::string message_data = string_from_sqlite3_value(argv[0]);
-    const std::string message_name = string_from_sqlite3_value(argv[1]);
+    sqlite3_value *message_data = argv[0];
+    sqlite3_value *message_name = argv[1];
     const std::string path = string_from_sqlite3_value(argv[2]);
     sqlite3_value *const default_value = (argc >= 4) ? argv[3] : nullptr;
     
@@ -100,8 +100,9 @@ static void protobuf_extract(sqlite3_context *context,
 
     // Special case: just return the root object
     if (path == "$") {
-        sqlite3_result_blob(context, message_data.c_str(),
-            message_data.length(), SQLITE_TRANSIENT);
+        const void *data = sqlite3_value_blob(message_data);
+        int len = sqlite3_value_bytes(message_data);
+        sqlite3_result_blob(context, data, len, SQLITE_TRANSIENT);
         return;
     }
     

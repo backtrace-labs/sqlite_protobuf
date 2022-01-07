@@ -28,8 +28,8 @@ using google::protobuf::TextFormat;
 void
 protobuf_to_text(sqlite3_context *context, int argc, sqlite3_value **argv)
 {
-    const std::string message_data = string_from_sqlite3_value(argv[0]);
-    const std::string message_name = string_from_sqlite3_value(argv[1]);
+    sqlite3_value *message_data = argv[0];
+    sqlite3_value *message_name = argv[1];
 
     auto message = parse_message(context, message_data, message_name);
     if (!message) {
@@ -55,7 +55,7 @@ void
 protobuf_of_text(sqlite3_context *context, int argc, sqlite3_value **argv)
 {
     const std::string text_data = string_from_sqlite3_value(argv[0]);
-    const std::string message_name = string_from_sqlite3_value(argv[1]);
+    sqlite3_value *message_name = argv[1];
 
     const Message *prototype = get_prototype(context, message_name);
     if (!prototype) {
