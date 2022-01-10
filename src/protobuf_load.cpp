@@ -21,6 +21,8 @@ static void protobuf_load(sqlite3_context *context,
                           int argc,
                           sqlite3_value **argv)
 {
+    invalidate_all_caches();
+
     // Confirm that we have permission to load extensions
     int enabled, err;
     err = sqlite3_db_config(sqlite3_context_db_handle(context),

@@ -1,3 +1,4 @@
+#include <atomic>
 #include "sqlite3ext.h"
 #include "utilities.h"
 
@@ -33,6 +34,15 @@ bool string_equal_to_sqlite3_value(const std::string& str, sqlite3_value *val)
     return memcmp(text, str.data(), text_size) == 0;
 }
 
+/*
+ * Whenever `protobuf_load` completes loading a shared object we
+ * need to invalidate the prototype and message caches of all threads.
+ * This is done by having `invalidate_all_caches` increment a global
+ * generation counter atomically, and then `get_prototype` checking
+ * against a previously saved value in its cache.
+ */
+std::atomic<uint64_t> global_prototype_generation;
+
 struct cache {
     // Message type name or "".
     std::string message_name;
@@ -43,7 +53,7 @@ struct cache {
     // Encoded message data of cached message or "".
     std::string message_data;
 
-    // The cached result of parsing of the `message_data`, if any.
+    // The cached result of parsing of the `message_data` or `nullptr`.
     std::unique_ptr<Message> message;
 
     // The maximum size of the encoded message we have parsed
@@ -51,8 +61,9 @@ struct cache {
     // the encoded messages drops suddenly.
     size_t max_message_data_size;
 
-    // True iff we have managed to parse `message_data`.
-    bool parse_success;
+    // This is compared to the global counter before checking
+    // for a match against `message_name`.
+    uint64_t prototype_generation;
 };
 
 inline struct cache *get_cache() {
@@ -60,7 +71,29 @@ inline struct cache *get_cache() {
     return &cache;
 }
 
+void invalidate_message_cache()
+{
+    struct cache *cached = get_cache();
+    cached->message_data.clear();
+    cached->message.reset();
+    cached->max_message_data_size = 0;
+}
+
+void invalidate_prototype_cache()
+{
+    struct cache *cached = get_cache();
+    cached->message_name.clear();
+    cached->prototype = nullptr;
+    cached->prototype_generation = global_prototype_generation.load(std::memory_order_acquire);
+    invalidate_message_cache();
+}
+
 } // namespace
+
+void invalidate_all_caches()
+{
+    global_prototype_generation.fetch_add(1, std::memory_order_acq_rel);
+}
 
 const Message *get_prototype(sqlite3_context *context,
                              sqlite3_value *message_name)
@@ -68,7 +101,9 @@ const Message *get_prototype(sqlite3_context *context,
     struct cache *cached = get_cache();
 
     // Look up the descriptor and prototype for the message type if necessary.
-    if (cached->prototype == nullptr ||
+    uint64_t global_gen = global_prototype_generation.load(std::memory_order_acquire);
+    if (global_gen != cached->prototype_generation ||
+        cached->prototype == nullptr ||
         !string_equal_to_sqlite3_value(cached->message_name, message_name)) {
 
         cached->message_name = string_from_sqlite3_value(message_name);
@@ -78,21 +113,12 @@ const Message *get_prototype(sqlite3_context *context,
         if (descriptor) {
             MessageFactory *factory = MessageFactory::generated_factory();
             cached->prototype = factory->GetPrototype(descriptor);
-
-            // Prime the message cache.
-            cached->message.reset(cached->prototype->New());
-            cached->parse_success = true;
+            cached->prototype_generation = global_gen;
+            invalidate_message_cache();
         } else {
             sqlite3_result_error(context, "Could not find message descriptor", -1);
-
-            // Invalidate the cache.
-            cached->message_name.clear();
-            cached->prototype = nullptr;
-            cached->message.reset();
-            cached->parse_success = false;
+            invalidate_prototype_cache();
         }
-        cached->message_data.clear();
-        cached->max_message_data_size = 0;
     }
 
     return cached->prototype;
@@ -110,28 +136,30 @@ Message *parse_message(sqlite3_context* context,
     struct cache *cached = get_cache();
 
     // Parse the message if we haven't already.
-    if (!string_equal_to_sqlite3_value(cached->message_data,message_data)) {
-        cached->message_data = string_from_sqlite3_value(message_data);
-
-        // Make sure we have an empty Message object to parse with.
-        // Reuse an existing Message object if the size of the message
-        // to parse doesn't shrink too much.
-        if (cached->message_data.size() >= cached->max_message_data_size / 2) {
-            cached->message->Clear();
-        } else {
-            cached->message.reset(prototype->New());
-            cached->max_message_data_size = 0;
-        }
-
-        cached->max_message_data_size = std::max(cached->max_message_data_size,
-                                                 cached->message_data.size());
-
-        cached->parse_success = cached->message->ParseFromString(cached->message_data);
+    if (cached->message != nullptr &&
+        string_equal_to_sqlite3_value(cached->message_data,message_data)) {
+        return cached->message.get();
     }
 
-    if (!cached->parse_success) {
+    cached->message_data = string_from_sqlite3_value(message_data);
+
+    // Make sure we have an empty Message object to parse with.
+    // Reuse an existing Message object if the size of the message
+    // to parse doesn't shrink too much.
+    if (cached->message &&
+        cached->message_data.size() >= cached->max_message_data_size / 2) {
+        cached->message->Clear();
+    } else {
+        cached->message.reset(prototype->New());
+        cached->max_message_data_size = 0;
+    }
+
+    cached->max_message_data_size = std::max(cached->max_message_data_size,
+                                             cached->message_data.size());
+
+    if (!cached->message->ParseFromString(cached->message_data)) {
         sqlite3_result_error(context, "Failed to parse message", -1);
-        return nullptr;
+        invalidate_message_cache();
     }
 
     return cached->message.get();

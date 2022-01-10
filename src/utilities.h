@@ -31,4 +31,8 @@ const google::protobuf::Message* get_prototype(sqlite3_context *context,
 google::protobuf::Message *parse_message(sqlite3_context *context,
                                          sqlite3_value *message_data,
                                          sqlite3_value *message_name);
+
+// Invalidates all caches used by `get_prototype` and `parse_message`.
+void invalidate_all_caches(void);
+
 }  // namespace sqlite_protobuf
