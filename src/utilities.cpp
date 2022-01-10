@@ -11,8 +11,9 @@ SQLITE_EXTENSION_INIT3
 
 std::string string_from_sqlite3_value(sqlite3_value *value)
 {
-    return std::string(reinterpret_cast<const char*>(sqlite3_value_text(value)),
-                        static_cast<size_t>(sqlite3_value_bytes(value)));
+    const char *text = static_cast<const char*>(sqlite3_value_blob(value));
+    size_t text_size = static_cast<size_t>(sqlite3_value_bytes(value));
+    return std::string(text, text_size);
 }
 
 namespace {
