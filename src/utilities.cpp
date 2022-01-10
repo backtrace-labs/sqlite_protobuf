@@ -43,6 +43,15 @@ bool string_equal_to_sqlite3_value(const std::string& str, sqlite3_value *val)
  */
 std::atomic<uint64_t> global_prototype_generation;
 
+/*
+ * We attempt to reuse `Message` objects for parsing by clearing them
+ * to reduce memory allocation overheads.  To avoid constantly
+ * reallocating when there are really small messages mixed in with
+ * moderately sized messages, we consider messages smaller than this
+ * limit to actually have this size.
+ */
+const size_t MIN_MESSAGE_DATA_REUSE_SIZE = 256;
+
 struct cache {
     // Message type name or "".
     std::string message_name;
@@ -143,11 +152,12 @@ Message *parse_message(sqlite3_context* context,
 
     cached->message_data = string_from_sqlite3_value(message_data);
 
-    // Make sure we have an empty Message object to parse with.
-    // Reuse an existing Message object if the size of the message
-    // to parse doesn't shrink too much.
-    if (cached->message &&
-        cached->message_data.size() >= cached->max_message_data_size / 2) {
+    // Make sure we have an empty Message object to parse with.  Reuse
+    // an existing Message object if the size of the message to parse
+    // doesn't shrink too much.
+    size_t cmp_size = std::max(cached->message_data.size(),
+                               MIN_MESSAGE_DATA_REUSE_SIZE);
+    if (cached->message && cmp_size >= cached->max_message_data_size/2) {
         cached->message->Clear();
     } else {
         cached->message.reset(prototype->New());
