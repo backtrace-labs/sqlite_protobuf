@@ -25,6 +25,9 @@ sqlite_protobuf_lib = static_library('sqlite_protobuf',
 libsqlite_protobuf_dep = declare_dependency(link_whole: sqlite_protobuf_lib,
 	include_directories: sqlite_protobuf_include_dir)
 
+libsqlite_protobuf_header_dep = declare_dependency(
+	include_directories: sqlite_protobuf_include_dir)
+
 sqlite_protobuf_so = shared_library('sqlite_protobuf',
 	_sqlite_protobuf_src_files,
 	include_directories: sqlite_protobuf_include_dir,
