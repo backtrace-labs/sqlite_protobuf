@@ -696,22 +696,32 @@ result_list_grow(struct proto_result_list *dst)
 	return true;
 }
 
-static bool
-result_list_push(struct proto_result_list *dst, int64_t row, void *proto,
-    void *bytes, size_t n_bytes)
+bool
+proto_result_list_push_row(
+    struct proto_result_list *dst, struct proto_result_row *row)
 {
 
 	if (dst->count >= dst->capacity && result_list_grow(dst) == false)
 		return false;
 
-	dst->rows[dst->count++] = (struct proto_result_row) {
-		.id = row,
-		.proto = proto,
-		.bytes = bytes,
-		.n_bytes = n_bytes,
-	};
+	dst->rows[dst->count++] = *row;
+	*row = PROTO_RESULT_ROW_INITIALIZER;
 
 	return true;
+}
+
+bool
+proto_result_list_push(struct proto_result_list *dst, int64_t row,
+    ProtobufCMessage *proto, void *bytes, size_t n_bytes)
+{
+
+	return proto_result_list_push_row(dst,
+	    &(struct proto_result_row) {
+	        .id = row,
+	        .proto = proto,
+	        .bytes = bytes,
+	        .n_bytes = n_bytes,
+	    });
 }
 
 int
@@ -780,7 +790,7 @@ proto_result_list_populate(struct proto_result_list *dst,
 			((uint8_t *)copy)[blob_size] = '\0';
 		}
 
-		if (result_list_push(dst, row_id, parsed, copy, blob_size) ==
+		if (proto_result_list_push(dst, row_id, parsed, copy, blob_size) ==
 		    false) {
 			protobuf_c_message_free_unpacked(parsed, /*allocator=*/NULL);
 			free(copy);

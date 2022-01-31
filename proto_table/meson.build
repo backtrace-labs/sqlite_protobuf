@@ -28,3 +28,5 @@ libproto_table_dep = declare_dependency(link_with: proto_table_lib,
 
 libproto_table_header_dep = declare_dependency(
 	include_directories: proto_table_include_dir)
+
+subdir('tests')

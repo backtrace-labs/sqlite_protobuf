@@ -210,6 +210,9 @@ struct proto_result_list {
 		};                                                                  \
 	}
 
+#define PROTO_RESULT_ROW_INITIALIZER                                                \
+	(struct proto_result_row) { .id = 0 }
+
 /**
  * Ensures the `spec`ced table in `db` is in the expected state.
  *
@@ -286,6 +289,36 @@ void proto_db_count_writes(struct proto_db *, size_t count);
  * zero-filled struct.
  */
 void proto_result_list_reset(struct proto_result_list *);
+
+/**
+ * Pushes a row to a proto_result_list.
+ *
+ * On success, ownership of the row's proto message and serialized
+ * bytes is transferred to the proto_result_list and the row is
+ * cleared using `PROTO_RESULT_ROW_INITIALIZER`.  The only failure
+ * condition is when the proto_result_list cannot be grown to
+ * accomodate the row.
+ *
+ * Returns true on success and false on memory allocation failure.
+ */
+bool proto_result_list_push_row(
+    struct proto_result_list *dst, struct proto_result_row *row);
+
+/**
+ * Forms a proto_result_row and pushes it to a proto_result_list.
+ *
+ * The `bytes` argument must point to a serialized version of `proto`
+ * of size `n_bytes`.
+ *
+ * On success, ownership of the unpacked ProtobufCMessage and the
+ * serialized bytes are transferred to the proto_result_list. The only
+ * failure condition is when the proto_result_list cannot be grown to
+ * accomodate the new row.
+ *
+ * Returns true on success and false on memory allocation failure.
+ */
+bool proto_result_list_push(struct proto_result_list *dst, int64_t row,
+    ProtobufCMessage *proto, void *bytes, size_t n_bytes);
 
 /**
  * Pushes results from the sqlite3 statement to the proto_result_list.
