@@ -849,3 +849,194 @@ proto_result_list_populate(struct proto_result_list *dst,
 		}
 	}
 }
+
+struct row_writer {
+	sqlite3 *db;
+	sqlite3_stmt *insert_stmt;
+	sqlite3_stmt *update_stmt;
+	const char *table_name;
+};
+
+static void
+row_writer_reset(struct row_writer *self)
+{
+	sqlite3_finalize(self->insert_stmt);
+	sqlite3_finalize(self->update_stmt);
+	memset(self, 0, sizeof *self);
+}
+
+static int
+row_writer_bind_proto_helper(sqlite3_stmt *stmt, struct proto_result_row *row)
+{
+	int rc;
+
+	if (row->bytes == NULL) {
+		rc =
+		    serialize_proto((void **)&row->bytes, &row->n_bytes, row->proto);
+		if (rc != SQLITE_OK)
+			return rc;
+	}
+
+	return PROTO_BIND(stmt, ":proto",
+	    (struct proto_bind_blob) {
+	        .bytes = row->bytes,
+	        .count = row->n_bytes,
+	    });
+}
+
+static int
+row_writer_insert(struct row_writer *self, struct proto_result_row *row)
+{
+	int rc;
+	sqlite3_stmt *stmt;
+
+	assert(row->id == 0);
+
+	stmt = self->insert_stmt;
+	if (stmt == NULL) {
+		char *sql;
+
+		/*
+		 * We INSERT into the _raw table because our triggers
+		 * on the cooked table cause `RETURNING` to not work.
+		 */
+		if (asprintf(&sql,
+		    " INSERT INTO %s_raw(proto)"
+		    " VALUES (:proto)"
+		    " RETURNING id",
+		    self->table_name) < 0) {
+			return SQLITE_NOMEM;
+		}
+
+		rc = proto_prepare(self->db, &stmt, sql);
+		free(sql);
+
+		if (rc != SQLITE_OK)
+			return rc;
+
+		self->insert_stmt = stmt;
+	}
+
+	rc = row_writer_bind_proto_helper(stmt, row);
+	if (rc != SQLITE_OK)
+		return rc;
+
+	rc = sqlite3_step(stmt);
+	if (rc != SQLITE_ROW)
+		return rc;
+
+	assert(sqlite3_column_count(stmt) == 1);
+
+	row->id = sqlite3_column_int64(stmt, 0);
+
+	return sqlite3_reset(stmt);
+}
+
+static int
+row_writer_update(struct row_writer *self, struct proto_result_row *row)
+{
+	int rc;
+	sqlite3_stmt *stmt;
+
+	assert(row->id != 0);
+
+	stmt = self->update_stmt;
+	if (stmt == NULL) {
+		char *sql;
+
+		if (asprintf(&sql,
+		    " UPDATE %s"
+		    " SET proto = :proto"
+		    " WHERE id = :id",
+		    self->table_name) < 0) {
+			return SQLITE_NOMEM;
+		}
+
+		rc = proto_prepare(self->db, &stmt, sql);
+		free(sql);
+
+		if (rc != SQLITE_OK)
+			return rc;
+
+		self->update_stmt = stmt;
+	}
+
+	rc = row_writer_bind_proto_helper(stmt, row);
+	if (rc != SQLITE_OK)
+		return rc;
+
+	rc = PROTO_BIND(stmt, ":id", row->id);
+	if (rc != SQLITE_OK)
+		return rc;
+
+	rc = sqlite3_step(stmt);
+	if (rc != SQLITE_DONE)
+		return rc;
+
+	return sqlite3_reset(stmt);
+}
+
+static int
+row_writer_upsert(struct row_writer *self, struct proto_result_row *row)
+{
+	if (row->id == 0) {
+		return row_writer_insert(self, row);
+	} else {
+		return row_writer_update(self, row);
+	}
+}
+
+int
+proto_write_rows(sqlite3 *db, struct proto_result_list *output_list,
+    struct proto_result_list *input_list, const char *table_name)
+{
+	struct row_writer row_writer;
+	size_t num_done = 0;
+	size_t num_left = input_list->count;
+	int rc;
+
+	row_writer = (struct row_writer) {
+		.db = db,
+		.table_name = table_name,
+	};
+
+	/*
+	 * Preallocate space on the output list so that transferring
+	 * ownership always succeeds.
+	 */
+	if (result_list_grow(output_list, num_left) == false) {
+		rc = SQLITE_NOMEM;
+		goto out;
+	}
+
+	/* Insert or update each row as appropriate. */
+	while (num_left > 0) {
+		struct proto_result_row *row = &input_list->rows[num_done];
+
+		rc = row_writer_upsert(&row_writer, row);
+		if (rc != SQLITE_OK)
+			goto out;
+
+		if (proto_result_list_push_row(output_list, row) == false) {
+			/* This cannot fail due to preallocation above. */
+			abort();
+		}
+
+		num_done++;
+		--num_left;
+	}
+
+out:
+	/* Remove the done rows from the start of the input list. */
+	memmove(&input_list->rows[0], &input_list->rows[num_done],
+	    num_left * sizeof(input_list->rows[0]));
+
+	memset(
+	    &input_list->rows[num_left], 0, num_done * sizeof(input_list->rows[0]));
+
+	input_list->count -= num_done;
+
+	row_writer_reset(&row_writer);
+
+	return rc;
+}

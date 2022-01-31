@@ -336,6 +336,40 @@ int proto_result_list_populate(struct proto_result_list *,
     const ProtobufCMessageDescriptor *, sqlite3 *, sqlite3_stmt *);
 
 /**
+ * Upserts rows in `input_list` to the table `table_name`.
+ *
+ * Each `proto_result_row` in `input_list` is either inserted or
+ * updated in the table named by `table_name` according as the `id`
+ * field of the `proto_result_row` is zero or not.  Rows successfully
+ * upserted are removed from `input_list` and appended to
+ * `output_list`.  Ownership of appended rows transfers to
+ * `output_list`.  The rows of `input_list` are processed in the order
+ * they appear in the `input_list`.
+ *
+ * The `id` field of row on the input list is updated to the primary
+ * key of the row if it is inserted into the table.  If the `bytes`
+ * field of a row is `NULL`, then the `ProtobufCMessage` in the
+ * `proto` field is used to serialize the message.  In this case the
+ * the `bytes` and `n_bytes` fields of the row are updated.  If both
+ * the `bytes` and `proto` fields are `NULL`, then an SQL `NULL` value
+ * is inserted or updated in the table.
+ *
+ * This function only performs a sequence database updates, but does
+ * not setup a transaction for them.  The caller should wrap the call
+ * in a transaction as appropriate.
+ *
+ * On success, the input list becomes empty and the output list
+ * contains all rows from the input list.  On partial success the
+ * successfully processed rows from the start of the input list are be
+ * transferred to the output list in order.
+ *
+ * Returns SQLITE_OK on complete success or the sqlite3 error code of
+ * the first failing upsert.
+ */
+int proto_write_rows(sqlite3 *db, struct proto_result_list *output_list,
+    struct proto_result_list *input_list, const char *table_name);
+
+/**
  * Prepares a statement for the sqlite handle `db`, and stores the
  * result in `stmt` on success.
  */
