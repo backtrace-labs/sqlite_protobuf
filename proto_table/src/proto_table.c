@@ -712,10 +712,19 @@ proto_result_list_reset(struct proto_result_list *list)
 }
 
 static bool
-result_list_grow(struct proto_result_list *dst)
+result_list_grow(struct proto_result_list *dst, size_t increase)
 {
+	size_t want_capacity;
 
-	while (dst->count >= dst->capacity) {
+	want_capacity = dst->count + increase;
+
+	if (want_capacity < increase)
+		return false; /* overflow */
+
+	if (want_capacity > SSIZE_MAX / sizeof(dst->rows[0]))
+		return false; /* can never fit */
+
+	while (dst->capacity < want_capacity) {
 		struct proto_result_row *grown;
 		size_t current = dst->capacity;
 		size_t goal = 2 * current;
@@ -723,7 +732,7 @@ result_list_grow(struct proto_result_list *dst)
 		if (goal < 8)
 			goal = 8;
 
-		if (goal < current || goal > SIZE_MAX / sizeof(grown[0]))
+		if (goal < current || goal > SSIZE_MAX / sizeof(grown[0]))
 			return false;
 
 		grown = realloc(dst->rows, goal * sizeof(grown[0]));
@@ -742,7 +751,8 @@ proto_result_list_push_row(
     struct proto_result_list *dst, struct proto_result_row *row)
 {
 
-	if (dst->count >= dst->capacity && result_list_grow(dst) == false)
+	if (dst->count >= dst->capacity &&
+	    result_list_grow(dst, /*increase=*/1) == false)
 		return false;
 
 	dst->rows[dst->count++] = *row;
