@@ -1,0 +1,7 @@
+syntax = "proto2";
+
+package proto_table;
+
+message TestMessage {
+  required int64 i64 = 1;
+}

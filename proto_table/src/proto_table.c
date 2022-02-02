@@ -488,6 +488,47 @@ fail_sqlite:
 	goto out;
 }
 
+static int
+serialize_proto(void **OUT_bytes, size_t *OUT_count, const ProtobufCMessage *proto)
+{
+	void *buf;
+	size_t actual;
+	size_t capacity;
+
+	*OUT_bytes = NULL;
+	*OUT_count = 0;
+
+	if (proto == NULL)
+		return SQLITE_OK;
+
+	capacity = protobuf_c_message_get_packed_size(proto);
+	buf = malloc(capacity);
+	if (buf == NULL)
+		return SQLITE_NOMEM;
+
+	actual = protobuf_c_message_pack(proto, buf);
+	assert(actual <= capacity && "protobuf overflow");
+
+	*OUT_bytes = buf;
+	*OUT_count = actual;
+
+	return SQLITE_OK;
+}
+
+int
+proto_bind_helper_proto(sqlite3_stmt *stmt, int idx, const ProtobufCMessage *proto)
+{
+	void *bytes;
+	size_t count;
+	int rc;
+
+	rc = serialize_proto(&bytes, &count, proto);
+	if (rc)
+		return rc;
+
+	return sqlite3_bind_blob64(stmt, idx, bytes, count, free);
+}
+
 int64_t
 proto_table_paginate(sqlite3 *db, const char *table, int64_t begin, size_t wanted)
 {

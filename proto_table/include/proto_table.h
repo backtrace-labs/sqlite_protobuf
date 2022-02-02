@@ -407,6 +407,9 @@ struct proto_bind_zeroblob {
 		    struct proto_bind_blob: proto_bind_helper_blob,	\
 		    struct proto_bind_zeroblob: proto_bind_helper_zeroblob,\
 									\
+		    ProtobufCMessage *: proto_bind_helper_proto,	\
+		    const ProtobufCMessage *: proto_bind_helper_proto,  \
+									\
 		    const sqlite3_value *: sqlite3_bind_value,		\
 		    sqlite3_value *: sqlite3_bind_value,		\
 									\
@@ -475,3 +478,5 @@ proto_bind_helper_zeroblob(sqlite3_stmt *stmt, int idx, struct proto_bind_zerobl
 
 	return sqlite3_bind_zeroblob64(stmt, idx, v.count);
 }
+
+int proto_bind_helper_proto(sqlite3_stmt *stmt, int idx, const ProtobufCMessage *);
