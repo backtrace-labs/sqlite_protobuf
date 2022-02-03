@@ -190,28 +190,51 @@ struct proto_result_list {
 	struct proto_result_row *rows;
 };
 
+#define PROTO_RESULT_ROW_INITIALIZER                                                \
+	(struct proto_result_row) { .id = 0 }
+
 #define PROTO_RESULT_LIST_INITIALIZER                                               \
 	(struct proto_result_list) { .count = 0 }
 
+/**
+ * Declares an application specific row type `struct ROW_TYPE` that is
+ * memory layout compatible with `proto_result_row`.  The `proto`
+ * field has type `PROTO_TYPE *` instead of `ProtobufCMessage *`.  The
+ * row may be accessed as a `proto_result_row` via the `impl` field.
+ */
+#define PROTO_RESULT_ROW(PROTO_TYPE, ROW_TYPE)                                      \
+	struct ROW_TYPE {                                                           \
+		union {                                                             \
+			struct {                                                    \
+				int64_t id;                                         \
+				PROTO_TYPE *proto;                                  \
+				void *bytes;                                        \
+				size_t n_bytes;                                     \
+			};                                                          \
+			struct proto_result_row impl;                               \
+		};                                                                  \
+	}
+
+/**
+ * Declares application specific result list type `struct LIST_TYPE`
+ * and an inner row type `struct ROW_TYPE` that are memory layout
+ * compatible with `proto_result_list` and `proto_result_row`
+ * respectively.  The list may be accessed as a `proto_result_list`
+ * via the `impl` field.  The row type is declared using
+ * `PROTO_RESULT_ROW(PROTO_TYPE, ROW_TYPE)`.  The `ROW_TYPE` parameter
+ * may be empty if the row type doesn't require a name.
+ */
 #define PROTO_RESULT_LIST(LIST_TYPE, PROTO_TYPE, ROW_TYPE)                          \
 	struct LIST_TYPE {                                                          \
 		union {                                                             \
 			struct {                                                    \
 				size_t count;                                       \
 				size_t capacity;                                    \
-				struct ROW_TYPE {                                   \
-					int64_t id;                                 \
-					PROTO_TYPE *proto;                          \
-					void *bytes;                                \
-					size_t n_bytes;                             \
-				} * rows;                                           \
+				PROTO_RESULT_ROW(PROTO_TYPE, ROW_TYPE) * rows;      \
 			};                                                          \
 			struct proto_result_list impl;                              \
 		};                                                                  \
 	}
-
-#define PROTO_RESULT_ROW_INITIALIZER                                                \
-	(struct proto_result_row) { .id = 0 }
 
 /**
  * Ensures the `spec`ced table in `db` is in the expected state.
