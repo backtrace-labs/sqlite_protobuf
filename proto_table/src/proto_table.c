@@ -694,16 +694,20 @@ proto_db_count_writes(struct proto_db *db, size_t n)
 }
 
 void
+proto_result_row_reset(struct proto_result_row *row)
+{
+	protobuf_c_message_free_unpacked(row->proto, /*allocator=*/NULL);
+	free(row->bytes);
+
+	*row = PROTO_RESULT_ROW_INITIALIZER;
+	return;
+}
+
+void
 proto_result_list_reset(struct proto_result_list *list)
 {
-
-	for (size_t i = 0; i < list->count; i++) {
-		ProtobufCMessage *proto;
-
-		proto = list->rows[i].proto;
-		protobuf_c_message_free_unpacked(proto, /*allocator=*/NULL);
-		free(list->rows[i].bytes);
-	}
+	for (size_t i = 0; i < list->count; i++)
+		proto_result_row_reset(&list->rows[i]);
 
 	free(list->rows);
 

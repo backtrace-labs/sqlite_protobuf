@@ -308,6 +308,12 @@ void proto_db_batch_end(struct proto_db *);
 void proto_db_count_writes(struct proto_db *, size_t count);
 
 /**
+ * Releases any resource owned by the row and reinitialises it to a
+ * zero-filled struct.
+ */
+void proto_result_row_reset(struct proto_result_row *);
+
+/**
  * Releases any resource owned by the list and reinitialises it to a
  * zero-filled struct.
  */
