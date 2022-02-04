@@ -199,6 +199,59 @@ exercise_proto_write_rows(sqlite3 *db)
 	proto_result_list_reset(&output_list);
 }
 
+static void
+exercise_proto_write_row(sqlite3 *db)
+{
+	struct proto_result_row row;
+	ProtoTable__TestMessage *msg;
+	int64_t id;
+
+	/*
+	 * Insert a new row.
+	 */
+	msg = mkmsg(234);
+	row = (struct proto_result_row) { .proto = &msg->base };
+
+	assert(proto_write_row(db, &row, "T") == SQLITE_OK);
+
+	id = row.id;
+	assert(id != 0);
+
+	proto_result_row_reset(&row);
+
+	/*
+	 * Lookup the inserted row.
+	 */
+	row = get_row_by_id(db, id);
+	assert(row.id == id);
+
+	msg = (ProtoTable__TestMessage *)row.proto;
+	assert(msg->i64 == 234);
+
+	proto_result_row_reset(&row);
+
+	/*
+	 * Update the row.
+	 */
+	msg = mkmsg(346);
+	row = (struct proto_result_row) { .id = id, .proto = &msg->base };
+
+	assert(proto_write_row(db, &row, "T") == SQLITE_OK);
+
+	proto_result_row_reset(&row);
+
+	/*
+	 * Lookup the updated row.
+	 */
+	row = get_row_by_id(db, id);
+	assert(row.id == id);
+
+	msg = (ProtoTable__TestMessage *)row.proto;
+	assert(msg->i64 == 346);
+
+	proto_result_row_reset(&row);
+}
+
 int
 main(void)
 {
@@ -215,6 +268,8 @@ main(void)
 	exercise_bind_message(db);
 
 	exercise_proto_write_rows(db);
+
+	exercise_proto_write_row(db);
 
 	sqlite3_close(db);
 

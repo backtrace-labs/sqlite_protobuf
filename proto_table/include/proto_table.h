@@ -399,6 +399,17 @@ int proto_write_rows(sqlite3 *db, struct proto_result_list *output_list,
     struct proto_result_list *input_list, const char *table_name);
 
 /**
+ * Upserts a single row in a table.
+ *
+ * This is equivalent to calling `proto_write_rows` with an input list
+ * containing just the given row.  Ownership of the row is maintained
+ * by the caller, and the row is updated as described in
+ * `proto_write_rows`.
+ */
+int proto_write_row(
+    sqlite3 *db, struct proto_result_row *row, const char *table_name);
+
+/**
  * Prepares a statement for the sqlite handle `db`, and stores the
  * result in `stmt` on success.
  */

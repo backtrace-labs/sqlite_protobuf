@@ -1044,3 +1044,35 @@ out:
 
 	return rc;
 }
+
+int
+proto_write_row(sqlite3 *db, struct proto_result_row *row, char const *table_name)
+{
+	struct proto_result_list input = PROTO_RESULT_LIST_INITIALIZER;
+	struct proto_result_list output = PROTO_RESULT_LIST_INITIALIZER;
+	int rc;
+
+	if (proto_result_list_push_row(&input, row) == false)
+		return SQLITE_NOMEM;
+
+	rc = proto_write_rows(db, &output, &input, table_name);
+
+	assert(input.count == 0 || input.count == 1);
+	assert(output.count == 0 || output.count == 1);
+	assert(input.count + output.count == 1);
+
+	if (input.count == 1) {
+		*row = input.rows[0];
+		input.count = 0;
+	}
+
+	if (output.count == 1) {
+		*row = output.rows[0];
+		output.count = 0;
+	}
+
+	proto_result_list_reset(&input);
+	proto_result_list_reset(&output);
+
+	return rc;
+}
