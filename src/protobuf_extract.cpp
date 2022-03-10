@@ -187,7 +187,7 @@ static void protobuf_extract(sqlite3_context *context,
                 return;
             case FieldDescriptor::CppType::CPPTYPE_BOOL:
                 sqlite3_result_int64(context,
-                    field->default_value_bool() ? 0 : 1);
+                    field->default_value_bool() ? 1 : 0);
                 return;
             case FieldDescriptor::CppType::CPPTYPE_ENUM:
                 handle_special_enum_path(context,
@@ -326,7 +326,7 @@ static void protobuf_extract(sqlite3_context *context,
                 bool value = is_repeated
                     ? reflection->GetRepeatedBool(*message, field, field_index)
                     : reflection->GetBool(*message, field);
-                sqlite3_result_int64(context, value ? 0 : 1);
+                sqlite3_result_int64(context, value ? 1 : 0);
                 return;
             }
             case FieldDescriptor::CppType::CPPTYPE_ENUM:
