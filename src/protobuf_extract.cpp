@@ -173,12 +173,20 @@ static void protobuf_extract(sqlite3_context *context,
             case FieldDescriptor::CppType::CPPTYPE_UINT32:
                 sqlite3_result_int64(context, field->default_value_uint32());
                 return;
-            case FieldDescriptor::CppType::CPPTYPE_UINT64:
-                sqlite3_log(SQLITE_WARNING,
-                    "Protobuf field \"%s\" is unsigned, but SQLite does not "
-                    "support unsigned types", field->full_name().c_str());
-                sqlite3_result_int64(context, field->default_value_uint64());
+            case FieldDescriptor::CppType::CPPTYPE_UINT64: {
+                uint64_t value;
+
+                value = field->default_value_uint64();
+                if (value > INT64_MAX) {
+                    sqlite3_log(SQLITE_WARNING,
+                                "Protobuf field \"%s\" is unsigned, but SQLite does not "
+                                "support unsigned types. "
+                                "Default value %llu doesn't fit in an int64",
+                                field->full_name().c_str(), value);
+                }
+                sqlite3_result_int64(context, value);
                 return;
+            }
             case FieldDescriptor::CppType::CPPTYPE_DOUBLE:
                 sqlite3_result_double(context, field->default_value_double());
                 return;
@@ -296,12 +304,17 @@ static void protobuf_extract(sqlite3_context *context,
             }
             case FieldDescriptor::CppType::CPPTYPE_UINT64:
             {
-                sqlite3_log(SQLITE_WARNING,
-                    "Protobuf field \"%s\" is unsigned, but SQLite does not "
-                    "support unsigned types");
                 uint64_t value = is_repeated
                     ? reflection->GetRepeatedUInt64(*message, field, field_index)
                     : reflection->GetUInt64(*message, field);
+
+                if (value > INT64_MAX) {
+                    sqlite3_log(SQLITE_WARNING,
+                                "Protobuf field \"%s\" is unsigned, but SQLite does not "
+                                "support unsigned types. "
+                                "Value %llu doesn't fit in an int64.",
+                                field->full_name().c_str(), value);
+                }
                 sqlite3_result_int64(context, value);
                 return;
             }
